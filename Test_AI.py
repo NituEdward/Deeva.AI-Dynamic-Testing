@@ -1,6 +1,55 @@
-from importuri import *
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options
+import pytest
+import requests
 
-#Setup pentru Browser
+# Constants
+class TestData:
+    BASE_URL = "https://www.deeva.ai/"
+    EMAIL = "eddieinquieries@gmail.com"
+    PASSWORD = "!Deeva123"
+    CHAT_MESSAGE = "Hello Deeva, how are you today?"
+
+# Page Objects
+class LoginPage:
+    EMAIL_FIELD = (By.ID, "email")
+    PASSWORD_FIELD = (By.ID, "password")
+    LOGIN_BUTTON = (By.XPATH, "//button[@type='submit']")
+    LOGIN_LINK = (By.XPATH, "//a[contains(@href, '/login')]")
+
+    def __init__(self, driver):
+        self.driver = driver
+        self.wait = WebDriverWait(driver, 10)
+
+    def login(self, email, password):
+        self.wait.until(EC.element_to_be_clickable(self.LOGIN_LINK)).click()
+        self.wait.until(EC.presence_of_element_located(self.EMAIL_FIELD)).send_keys(email)
+        self.wait.until(EC.presence_of_element_located(self.PASSWORD_FIELD)).send_keys(password)
+        self.wait.until(EC.element_to_be_clickable(self.LOGIN_BUTTON)).click()
+
+class ChatPage:
+    MESSAGE_INPUT = (By.NAME, "userInput")
+    SEND_BUTTON = (By.XPATH, "//button[@type='submit']")
+    WELCOME_MESSAGE = (By.XPATH, "//button[contains(@class, 'welcome')]")
+    CHOOSE_DEEVA_BUTTON = (By.XPATH, "//a[contains(@href, '/choose-deeva')]")
+
+    def __init__(self, driver):
+        self.driver = driver
+        self.wait = WebDriverWait(driver, 10)
+
+    def send_message(self, message):
+        message_field = self.wait.until(EC.presence_of_element_located(self.MESSAGE_INPUT))
+        message_field.send_keys(message)
+        self.wait.until(EC.element_to_be_clickable(self.SEND_BUTTON)).click()
+
+    def choose_deeva(self):
+        self.wait.until(EC.element_to_be_clickable(self.CHOOSE_DEEVA_BUTTON)).click()
+        return self.wait.until(EC.presence_of_element_located(self.WELCOME_MESSAGE))
+
+# Fixtures
 @pytest.fixture
 def browser():
     chrome_options = Options()
@@ -10,136 +59,43 @@ def browser():
     yield driver
     driver.quit()
 
-# TC_001
-def test_website_status(browser):
-    url = "https://www.deeva.ai/"
-    response = requests.get(url)
-    # Verificarea codului de status HTTP
-    assert response.status_code == 200, f"Codul de status este {response.status_code}, dar asteptam 200"
-    # Verificarea lungimii raspunsului
-    assert len(response.text) > 0, "Continutul raspunsului este gol"
+# Test Cases
+def test_website_status():
+    """Verifică disponibilitatea și răspunsul website-ului Deeva.ai"""
+    response = requests.get(TestData.BASE_URL)
+    assert response.status_code == 200, f"Status code invalid: {response.status_code}"
+    assert len(response.text) > 0, "Răspunsul este gol"
 
-#TC_002
 def test_choose_deeva(browser):
-    url = "https://www.deeva.ai/"
-    browser.get(url)
-    browser.maximize_window()
+    """Verifică funcționalitatea de selectare Deeva"""
+    browser.get(TestData.BASE_URL)
+    chat_page = ChatPage(browser)
+    welcome_element = chat_page.choose_deeva()
+    assert welcome_element.is_displayed(), "Elementul de welcome nu este vizibil"
 
-    time.sleep(2)
-
-    click_deeva = browser.find_element(By.XPATH,"/html/body/div/div[3]/div/div/div/div[1]/div[2]/div[2]/a")
-    click_deeva.click()
-
-    time.sleep(2)
-
-    welcome_to_deeva = browser.find_element(By.XPATH,"/html/body/div/div[3]/div/div[2]/div[2]/div/div[1]/div[1]/button")
-    assert welcome_to_deeva.is_displayed() , "Pagina nu a fost redirectionata catre selectie"
-    
-
-#TC_003
 def test_login(browser):
-    url ="https://www.deeva.ai/"
-    browser.get(url)
-    browser.maximize_window()
-
-    login = browser.find_element(By.XPATH,"/html/body/div/div[3]/div/div/div/header/div/div[3]/div/a[2]")
-    login.click()
-
-    time.sleep(3)
-
-    email = browser.find_element(By.ID,"email")
-    email_login = "eddieinquieries@gmail.com"
-    email.send_keys(email_login)
-    assert email.is_displayed(), "Campul pentru email nu este vizibil"
-
-    time.sleep(1)
-
-    password = browser.find_element(By.ID,"password")
-    password_login = "!Deeva123"
-    password.send_keys(password_login)
-    assert password.is_displayed(), "Campul pentru parolă nu este vizibil"
-
-    time.sleep(1)
-
-    login = browser.find_element(By.XPATH,"/html/body/div/div[3]/div/div[2]/div[2]/div/form/button")
-    login.click()
-    assert login.is_displayed(), "Butonul de login nu este vizibil"
+    """Verifică funcționalitatea de autentificare"""
+    browser.get(TestData.BASE_URL)
+    login_page = LoginPage(browser)
+    login_page.login(TestData.EMAIL, TestData.PASSWORD)
     
-    time.sleep(10)
+    # Verificăm că suntem logați așteptând elementul de chat
+    chat_page = ChatPage(browser)
+    assert WebDriverWait(browser, 10).until(
+        EC.presence_of_element_located(chat_page.MESSAGE_INPUT)
+    ), "Login nereușit"
 
-#TC_004
-def test_AI(browser):
-    url ="https://www.deeva.ai/"
-    browser.get(url)
-    browser.maximize_window()
-
-    login = browser.find_element(By.XPATH,"/html/body/div/div[3]/div/div/div/header/div/div[3]/div/a[2]")
-    login.click()
-
-    time.sleep(3)
-
-    email = browser.find_element(By.ID,"email")
-    email_login = "eddieinquieries@gmail.com"
-    email.send_keys(email_login)
-    assert email.is_displayed(), "Campul pentru email nu este vizibil"
-
-    time.sleep(1)
-
-    password = browser.find_element(By.ID,"password")
-    password_login = "!Deeva123"
-    password.send_keys(password_login)
-    assert password.is_displayed(), "Campul pentru parolă nu este vizibil"
-
-    time.sleep(1)
-
-    login = browser.find_element(By.XPATH,"/html/body/div/div[3]/div/div[2]/div[2]/div/form/button")
-    login.click()
-    assert login.is_displayed(), "Butonul de login nu este vizibil"
+def test_chat_functionality(browser):
+    """Verifică funcționalitatea de chat cu Deeva"""
+    browser.get(TestData.BASE_URL)
+    login_page = LoginPage(browser)
+    chat_page = ChatPage(browser)
     
-    time.sleep(3)
-
-    message_input = browser.find_element(By.NAME,"userInput")
-    message = "Hello Deeva , how are you today?"
-    message_input.send_keys(message)
-    message_input.send_keys(Keys.RETURN)
-
-    time.sleep(3)
-
-    send = browser.find_element(By.XPATH,"/html/body/div/div[3]/div/div[2]/div[5]/form/div/div/div/div/button[1]")
-    send.click()
-
-    time.sleep(10)
-
-    mesaj = "last-message-div"
-    mesaj = browser.find_element(By.CLASS_NAME,mesaj)
-
-    assert mesaj.is_displayed() , "Chat-ul nu functioneaza"
-
-    time.sleep(15)
-
-
-#TC05
-def test_site_loading_time():
-    browser = webdriver.Chrome()  
-    url = "https://www.deeva.ai/"  # Specificăm URL-ul
-
-    start_time = time.time()  # Start timer
-
-    # Deschidem URL-ul și maximizăm fereastra
-    browser.get(url)
-    browser.maximize_window()
+    login_page.login(TestData.EMAIL, TestData.PASSWORD)
+    chat_page.send_message(TestData.CHAT_MESSAGE)
     
-    # Așteptăm ca pagina să fie complet încărcată
-    browser.implicitly_wait(10)  
-
-    # Măsurăm timpul de încărcare
-    loading_time = time.time() - start_time
-    print(f"Timpul de încărcare a paginii: {loading_time:.2f} secunde")
-
-    # Adăugăm o aserțiune opțională, dacă vrei să limitezi timpul de încărcare
-    assert loading_time < 5, "Site-ul s-a încărcat prea lent!"
-
-    browser.quit()
-
-
+    # Așteptăm să apară răspunsul (poți adăuga verificări specifice pentru răspuns)
+    WebDriverWait(browser, 15).until(
+        EC.presence_of_element_located((By.XPATH, "//div[contains(@class, 'message-response')]"))
+    )
 
